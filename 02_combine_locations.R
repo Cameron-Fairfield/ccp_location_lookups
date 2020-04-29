@@ -148,7 +148,8 @@ ccp_looked_up %>%
          country = ifelse(redcap_data_access_group == 'Queen Elizabeth University Hospital, Glasgow University Hospital Monklands Airdrie' & dag_id == 'RHM01',
                            'Scotland', country))-> ccp_looked_up_complete
 
-unique(ccp_looked_up_complete$redcap_data_access_group)
+#unique(ccp_looked_up_complete$redcap_data_access_group)
+
 #Run the still missings through google
 result_lat_long = geocode(ccp_still_missings$redcap_data_access_group, output = "latlona", source = "google") 
 
@@ -209,6 +210,11 @@ postcode_ccg = postcode_lookup %>% mutate(ccg = ifelse(country != 'England', hlt
 
 combined_all = combined_all %>% 
   left_join(postcode_ccg, by = c('postcode' = 'pcds'))
+
+#Manual edit to Chesterfield, Devon hosps
+# 1 Torbay Hospital               E38000152
+# 2 North Devon District Hospital E38000129
+# 3 Chesterfield Royal Hospital   E38000115
 
 #write a csv
 save_date = Sys.Date() %>% format('%d-%B-%Y')
