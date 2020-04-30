@@ -5,6 +5,7 @@ library(tidyverse)
 library(readxl)
 library(stringr)
 library(ggmap)
+library(janitor)
 
 `%ni%` = Negate(`%in%`)
 
@@ -13,7 +14,7 @@ source('01_pull_centres.R')
 postcode_regex_string = '(?:[A-Za-z][A-HJ-Ya-hj-y]?[0-9][0-9A-Za-z]? ?[0-9][A-Za-z]{2}|[Gg][Ii][Rr] ?0[Aa]{2})'
 
 #google maps set up
-api_key = '' #Google maps API key
+api_key = 'AIzaSyADK-Xycf5uqnyvYDPP58wSQdnLJZCzrr8' #Google maps API key
 
 register_google(api_key)
 
@@ -239,7 +240,24 @@ combined_all = combined_all %>%
                       country = ifelse(dag_id == 'RVV00', 'England', country),
                       lon = ifelse(dag_id == 'RVV00', 1.3893986940383911, lon),
                       lat = ifelse(dag_id == 'RVV00', 51.3780517578125, lat),
-                      ccg = ifelse(dag_id == 'RVV00', 'E38000184', ccg))
+                      ccg = ifelse(dag_id == 'RVV00', 'E38000184', ccg),
+                      place_name = ifelse(dag_id == 'RK590', 'Derriford Hospital', place_name),
+                      postcode = ifelse(dag_id == 'RK590', 'PL6 8DH', postcode),
+                      country = ifelse(dag_id == 'RK590', 'England', country),
+                      lon = ifelse(dag_id == 'RK590', -4.1136713027954102, lon),
+                      lat = ifelse(dag_id == 'RK590', 50.416728973388672, lat),
+                      ccg = ifelse(dag_id == 'RK590', 'E38000230', ccg))
+
+#Now lets add a city to postcode
+postcode_to_city = read_csv('location_data/postcode_city_district.csv') %>% 
+                   clean_names() %>% 
+                   select(postcode, region) %>% 
+                   rename(postcode_start = postcode,
+                          city = region) %>% distinct(postcode_start, .keep_all = T)
+
+combined_all = combined_all %>% 
+  mutate(postcode_start = gsub("[[:space:]].*", '', postcode)) %>% 
+  left_join(postcode_to_city, by = 'postcode_start')
 
 #write a csv
 save_date = Sys.Date() %>% format('%d-%B-%Y')
