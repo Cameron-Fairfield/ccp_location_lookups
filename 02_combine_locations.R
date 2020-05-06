@@ -358,8 +358,9 @@ ccp_dag_unlabelled = ccp_ids %>%
                      select(dag_id, redcap_data_access_group) %>% 
                      rename(redcap_data_access_group_unlabelled = redcap_data_access_group)
 
-combined_all %>% 
-  left_join(ccp_dag_unlabelled, by = 'dag_id')
+combined_all = combined_all %>% 
+  left_join(ccp_dag_unlabelled, by = 'dag_id') %>% 
+  select(redcap_data_access_group, redcap_data_access_group_unlabelled, everything())
 
 #write a csv
 save_date = Sys.Date() %>% format('%d-%B-%Y')
