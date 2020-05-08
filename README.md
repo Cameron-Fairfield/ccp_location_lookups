@@ -16,6 +16,17 @@ These are patient-level data that contain disclosive information. Only use in a 
 It is the end-users responsibility to understand the processes contained in these scripts, the assumptions that are used, and to check the data created conforms to their expectations. 
 
 ### How to use
+
+### Set environment variable with REDCap API token
+
+Do not store the REDCap API token as plain text.
+
+``` r
+usethis::edit_r_environ()
+# this opens up .Renviron, add your token, e.g. ccp_token = 2F3xxxxxxxxxxxxE0111
+# Restart R
+```
+
 ### `02_combine_locations.R`
 
 **Description**: Run once to generate a CSV to lookup centres.
