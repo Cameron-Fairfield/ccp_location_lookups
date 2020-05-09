@@ -27,12 +27,10 @@ ni_list = read_csv('location_data/niorg.csv', col_names = F)
 wales_list = read_csv('location_data/wlhbsite.csv', col_names = F)
 scotland_list = read_csv('location_data/scotland_hospitals.csv')
 townsend_scores_output_areas = read_csv('location_data/townsend_oa_2011.csv') %>% clean_names() %>% select(geo_code, tds)
-postcode_lookup = read_csv('location_data/NSPL_FEB_2020_UK.csv') %>% 
-  left_join(townsend_scores_output_areas, by = c('oa11' = 'geo_code')) %>% 
-  group_by(ccg) %>% 
-  mutate(tds_mean = mean(tds, na.rm = T),
-         imd_average = mean(imd, na.rm = T)) %>% 
-  ungroup()
+postcode_lookup = read_csv('location_data/NSPL_FEB_2020_UK.csv')
+
+postcode_lookup_tds = read_csv('location_data/NSPL_FEB_2020_UK.csv') %>% 
+  left_join(townsend_scores_output_areas, by = c('oa11' = 'geo_code'))
 
 #First, fix errors in hosp2 list as there's lots of them
 hosp_2_list_keep = hosp_2_list_in %>% 
@@ -208,12 +206,12 @@ postcode_lookup = postcode_lookup %>%
   mutate(country = ifelse(startsWith(ccg, 'S0'), 'Scotland', NA),
          country = ifelse(startsWith(ccg, 'E'), 'England', country),
          country = ifelse(startsWith(ccg, 'W1'), 'Wales', country),
-         country = ifelse(startsWith(ccg, 'ZC'), 'Northern Ireland', country)) %>% 
-  rename(imd_average_postcodes = imd_average)
+         country = ifelse(startsWith(ccg, 'ZC'), 'Northern Ireland', country)) 
+#rename(imd_average_postcodes = imd_average)
 
 postcode_country = postcode_lookup %>% 
   mutate(ccg = ifelse(country != 'England', hlthau, ccg)) %>% 
-  select(pcds, country, ccg, tds_mean, imd_average_postcodes) 
+  select(pcds, country, ccg) 
 
 combined_all = ccp_combined_2 %>% 
   left_join(postcode_country, by = c('postcode' = 'pcds')) %>% 
@@ -222,7 +220,7 @@ combined_all = ccp_combined_2 %>%
 
 postcode_ccg = postcode_lookup %>% 
   mutate(ccg = ifelse(country != 'England', hlthau, ccg)) %>% 
-  select(pcds, ccg, tds_mean, imd_average_postcodes)
+  select(pcds, ccg)
 
 combined_all = combined_all %>% 
   left_join(postcode_ccg, by = c('postcode' = 'pcds'))
@@ -278,7 +276,27 @@ combined_all = combined_all %>%
          country = ifelse(dag_id == 'RV001', 'England', country),
          lon = ifelse(dag_id == 'RV001', 0.91622304916381836, lon),
          lat = ifelse(dag_id == 'RV001', 51.141487121582031, lat),
-         ccg = ifelse(dag_id == 'RV001', 'E38000002', ccg))
+         ccg = ifelse(dag_id == 'RV001', 'E38000002', ccg),
+         place_name = ifelse(dag_id == 'S341H', 'Royal Infirmary Of Edinburgh At Little France', place_name),
+         postcode = ifelse(dag_id == 'S341H', 'EH16 4SA', postcode),
+         country = ifelse(dag_id == 'S341H', 'Scotland', country),
+         lon = ifelse(dag_id == 'S341H', -3.1347719, lon),
+         lat = ifelse(dag_id == 'S341H', 55.9218084, lat),
+         ccg = ifelse(dag_id == 'S341H', 'S08000024', ccg),
+         place_name = ifelse(dag_id == 'RYGHQ', 'Caludon Centre', place_name),
+         postcode = ifelse(dag_id == 'RYGHQ', 'CV2 2TE', postcode),
+         country = ifelse(dag_id == 'RYGHQ', 'England', country),
+         lon = ifelse(dag_id == 'RYGHQ', -1.4452332, lon),
+         lat = ifelse(dag_id == 'RYGHQ', 52.4225547, lat),
+         ccg = ifelse(dag_id == 'RYGHQ', 'E38000038', ccg),
+         place_name = ifelse(dag_id == 'NR501', 'Mount Gould Hospital', place_name),
+         postcode = ifelse(dag_id == 'NR501', 'PL4 7QD', postcode),
+         country = ifelse(dag_id == 'NR501', 'England', country),
+         lon = ifelse(dag_id == 'NR501', -4.111707, lon),
+         lat = ifelse(dag_id == 'NR501', 50.3789894, lat),
+         ccg = ifelse(dag_id == 'NR501', 'E38000230', ccg))
+
+#combined_all %>% filter(is.na(postcode)) -> test
 
 #Now lets add a city to postcode
 postcode_to_city = read_csv('location_data/postcode_city_district.csv') %>% 
@@ -292,17 +310,25 @@ combined_all = combined_all %>%
   left_join(postcode_to_city, by = 'postcode_start')
 
 #Finally, add back in the townsend average scores to those which needed new postcodes
-lookup_tds_avg_missing = postcode_lookup %>% 
-  select(pcds, tds_mean, imd_average_postcodes) %>% 
-  rename(tds_mean_new = tds_mean,
-         imd_average_postcodes_new = imd_average_postcodes)
+postcode_lookup_tds = postcode_lookup_tds %>% 
+  mutate(country = ifelse(startsWith(ccg, 'S0'), 'Scotland', NA),
+         country = ifelse(startsWith(ccg, 'E'), 'England', country),
+         country = ifelse(startsWith(ccg, 'W1'), 'Wales', country),
+         country = ifelse(startsWith(ccg, 'ZC'), 'Northern Ireland', country)) %>% 
+  mutate(ccg = ifelse(country != 'England', hlthau, ccg)) %>% 
+  ungroup() %>% 
+  distinct(oa11, .keep_all = T) %>% 
+  group_by(ccg) %>% 
+  mutate(imd_average_postcodes_new = mean(imd, na.rm = T),
+         tds_mean = mean(tds, na.rm = T)) %>% 
+  ungroup() %>% 
+  select(ccg, imd_average_postcodes_new, tds_mean) %>% 
+  distinct(ccg, .keep_all = T) 
 
 combined_all = combined_all %>% 
-  left_join(lookup_tds_avg_missing, by = c('postcode' = 'pcds')) %>% 
-  mutate(tds_mean = ifelse(is.na(tds_mean), tds_mean_new, tds_mean)) %>% 
-  mutate(imd_average_postcodes = ifelse(is.na(imd_average_postcodes), imd_average_postcodes_new, imd_average_postcodes)) %>% 
-  select(-tds_mean_new, -imd_average_postcodes)
-
+  left_join(postcode_lookup_tds, by = c('ccg' = 'ccg')) #%>% 
+  
+  
 # #CCGs not in 
 # list_english_nhs_trusts = read_csv('location_data/list_of_nhs_trusts.csv', col_names = F) %>%
 #   rename(org_code_prefix = X1,
@@ -373,3 +399,4 @@ save_date = Sys.Date() %>% format('%d-%B-%Y')
 
 write_csv(combined_all, paste0('data_out_ccp_lookups/ccp_dag_id_lookup_', save_date, '.csv'))
 write_csv(combined_all, paste0('data_out_ccp_lookups/ccp_dag_id_lookup.csv'))
+
