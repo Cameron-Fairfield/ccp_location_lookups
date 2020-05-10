@@ -1,5 +1,57 @@
 #TD 25/04/2020 run this to the bottom 
 #You need to download and unzip this file - https://geoportal.statistics.gov.uk/datasets/national-statistics-postcode-lookup-february-2020 too big github. Then just take out NSPL_FEB_2020_UK.csv
+#Scotland OA populations come from here:
+# https://www.scotlandscensus.gov.uk/ods-web/data-warehouse.html#bulkdatatab
+# download.file('https://www.scotlandscensus.gov.uk/ods-web/download/getDownloadFile.html?downloadFileIds=Output%20Area%20blk', destfile = 'scotland_oa.zip')
+
+weighted.harmean <- function(x, w, ...)
+{
+  return(sum(w)/(sum(w/x, ...)))
+}
+
+weighted.quantile <- function(x, w, probs=seq(0,1,0.25), na.rm=TRUE) {
+  x <- as.numeric(as.vector(x))
+  w <- as.numeric(as.vector(w))
+  if(anyNA(x) || anyNA(w)) {
+    ok <- !(is.na(x) | is.na(w))
+    x <- x[ok]
+    w <- w[ok]
+  }
+  stopifnot(all(w >= 0))
+  if(all(w == 0)) stop("All weights are zero", call.=FALSE)
+  #'
+  oo <- order(x)
+  x <- x[oo]
+  w <- w[oo]
+  Fx <- cumsum(w)/sum(w)
+  #'
+  result <- numeric(length(probs))
+  for(i in seq_along(result)) {
+    p <- probs[i]
+    lefties <- which(Fx <= p)
+    if(length(lefties) == 0) {
+      result[i] <- x[1]
+    } else {
+      left <- max(lefties)
+      result[i] <- x[left]
+      if(Fx[left] < p && left < length(x)) {
+        right <- left+1
+        y <- x[left] + (x[right]-x[left]) * (p-Fx[left])/(Fx[right]-Fx[left])
+        if(is.finite(y)) result[i] <- y
+      }
+    }
+  }
+  names(result) <- paste0(format(100 * probs, trim = TRUE), "%")
+  return(result)
+}
+
+
+#Weighted median
+
+weighted.median <- function(x, w, na.rm=TRUE) {
+  unname(weighted.quantile(x, probs=0.5, w=w, na.rm=na.rm))
+}
+
 #Compile locations
 library(tidyverse)
 library(readxl)
@@ -14,7 +66,7 @@ source('01_pull_centres.R')
 postcode_regex_string = '(?:[A-Za-z][A-HJ-Ya-hj-y]?[0-9][0-9A-Za-z]? ?[0-9][A-Za-z]{2}|[Gg][Ii][Rr] ?0[Aa]{2})'
 
 #google maps set up
-api_key = '' #Google maps API key
+api_key = 'AIzaSyADK-Xycf5uqnyvYDPP58wSQdnLJZCzrr8' #Google maps API key
 
 register_google(api_key)
 
@@ -28,9 +80,30 @@ wales_list = read_csv('location_data/wlhbsite.csv', col_names = F)
 scotland_list = read_csv('location_data/scotland_hospitals.csv')
 townsend_scores_output_areas = read_csv('location_data/townsend_oa_2011.csv') %>% clean_names() %>% select(geo_code, tds)
 postcode_lookup = read_csv('location_data/NSPL_FEB_2020_UK.csv')
+england_oa_populations = read_csv('location_data/eng_oa_to_population.csv') %>% rename(oa11 = `2011 output area`,
+                                                                                       total_pop_eng = `All usual residents`) %>% 
+  select(oa11, total_pop_eng)
 
+scotland_oa_populations = read_csv('location_data/KS101SC.csv') %>% rename(oa11 = X1,
+                                                                           total_pop_scot = `All people`) %>% 
+                                                                    select(oa11, total_pop_scot)
+
+scotland_imd_20_dz_lookup = read_excel('location_data/sco_datazone_imd20.xlsx', sheet = 3) %>% rename(oa11 = DZ,
+                                                                                                      simd20_rank = SIMD2020v2_Rank)
+
+#Townsend lookup
 postcode_lookup_tds = read_csv('location_data/NSPL_FEB_2020_UK.csv') %>% 
-  left_join(townsend_scores_output_areas, by = c('oa11' = 'geo_code'))
+  left_join(townsend_scores_output_areas, by = c('oa11' = 'geo_code')) %>% 
+  left_join(scotland_oa_populations, by = 'oa11') %>% 
+  left_join(england_oa_populations, by = 'oa11') %>% 
+  mutate(country = ifelse(startsWith(ccg, 'S0'), 'Scotland', NA),
+  country = ifelse(startsWith(ccg, 'E'), 'England', country),
+  country = ifelse(startsWith(ccg, 'W1'), 'Wales', country),
+  country = ifelse(startsWith(ccg, 'ZC'), 'Northern Ireland', country)) %>% 
+  mutate(total_pop = ifelse(country == 'Scotland', total_pop_scot, NA),
+         total_pop = ifelse(country == 'England', total_pop_eng, total_pop)) %>% select(-total_pop_eng, -total_pop_scot) %>% 
+  filter(!is.na(total_pop))
+
 
 #First, fix errors in hosp2 list as there's lots of them
 hosp_2_list_keep = hosp_2_list_in %>% 
@@ -311,24 +384,48 @@ combined_all = combined_all %>%
 
 #Finally, add back in the townsend average scores to those which needed new postcodes
 postcode_lookup_tds = postcode_lookup_tds %>% 
-  mutate(country = ifelse(startsWith(ccg, 'S0'), 'Scotland', NA),
-         country = ifelse(startsWith(ccg, 'E'), 'England', country),
-         country = ifelse(startsWith(ccg, 'W1'), 'Wales', country),
-         country = ifelse(startsWith(ccg, 'ZC'), 'Northern Ireland', country)) %>% 
   mutate(ccg = ifelse(country != 'England', hlthau, ccg)) %>% 
   ungroup() %>% 
   distinct(oa11, .keep_all = T) %>% 
+  group_by(country) %>% 
+  mutate(total_pop_sum = sum(total_pop),
+         weight_as_prop_t_pop = total_pop/ total_pop_sum) %>% 
+  ungroup() %>% 
   group_by(ccg) %>% 
   mutate(imd_average_postcodes_new = mean(imd, na.rm = T),
-         tds_mean = mean(tds, na.rm = T)) %>% 
+         tds_mean = mean(tds, na.rm = T),
+         w_me_tds = weighted.mean(tds, weight_as_prop_t_pop),
+         w_me_imd = weighted.mean(imd, weight_as_prop_t_pop),
+         w_har_tds = weighted.harmean(tds, weight_as_prop_t_pop),
+         w_har_imd = weighted.harmean(imd, weight_as_prop_t_pop),
+         w_med_imd = weighted.median(imd, weight_as_prop_t_pop),
+         w_med_tds = weighted.median(tds, weight_as_prop_t_pop)) %>% 
   ungroup() %>% 
-  select(ccg, imd_average_postcodes_new, tds_mean) %>% 
+  #work out proportions in lowest deciles.
+  group_by(country) %>% 
+  mutate(imd_decile = ntile(imd, 10)) %>% 
+  ungroup() %>% 
+  mutate(n_within_10_imd = ifelse(imd_decile == 1, total_pop, 0),
+         n_within_20_imd = ifelse(imd_decile <= 2, total_pop, 0)) %>% 
+  group_by(ccg) %>% 
+  mutate(prop_within_10_imd_ccg = sum(n_within_10_imd)/sum(total_pop),
+         prop_within_20_imd_ccg =  sum(n_within_20_imd)/sum(total_pop)) %>% 
+  ungroup() %>% 
+  mutate(tds_decile = ntile(tds, 10)) %>% 
+  mutate(n_within_10_tds = ifelse(tds_decile == 10, total_pop, 0),
+         n_within_20_tds = ifelse(tds_decile >= 9, total_pop, 0)) %>% 
+  group_by(ccg) %>% 
+  mutate(prop_within_10_tds_ccg = sum(n_within_10_tds)/sum(total_pop),
+         prop_within_20_tds_ccg =  sum(n_within_20_tds)/sum(total_pop)) %>% 
+  ungroup() %>% 
+  select(ccg, imd_average_postcodes_new, tds_mean, w_me_imd, w_me_tds, w_har_tds, w_har_imd,
+         w_med_imd, w_med_tds, prop_within_10_imd_ccg, prop_within_20_imd_ccg, prop_within_10_tds_ccg, prop_within_20_tds_ccg) %>% 
   distinct(ccg, .keep_all = T) 
+
 
 combined_all = combined_all %>% 
   left_join(postcode_lookup_tds, by = c('ccg' = 'ccg')) #%>% 
-  
-  
+
 # #CCGs not in 
 # list_english_nhs_trusts = read_csv('location_data/list_of_nhs_trusts.csv', col_names = F) %>%
 #   rename(org_code_prefix = X1,
@@ -393,10 +490,15 @@ combined_all = combined_all %>%
   left_join(ccp_dag_unlabelled, by = 'dag_id') %>% 
   select(redcap_data_access_group, redcap_data_access_group_unlabelled, everything())
 
+combined_all_no_imd = combined_all %>% 
+  select(-contains('imd'),
+         -contains('tds'))
 
 #write a csv
 save_date = Sys.Date() %>% format('%d-%B-%Y')
 
+write_csv(combined_all_no_imd, paste0('data_out_ccp_lookups/ccp_dag_id_lookup_wo_imd_', save_date, '.csv'))
+write_csv(combined_all_no_imd, paste0('data_out_ccp_lookups/ccp_dag_id_lookup_wo_imd.csv'))
+
 write_csv(combined_all, paste0('data_out_ccp_lookups/ccp_dag_id_lookup_', save_date, '.csv'))
 write_csv(combined_all, paste0('data_out_ccp_lookups/ccp_dag_id_lookup.csv'))
-
