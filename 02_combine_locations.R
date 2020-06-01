@@ -377,9 +377,33 @@ combined_all = combined_all %>%
          country = ifelse(dag_id == 'RZWAS', 'England', country),
          lon = ifelse(dag_id == 'RZWAS', -2.79373741149902, lon),
          lat = ifelse(dag_id == 'RZWAS', 52.7093620300293, lat),
-         ccg = ifelse(dag_id == 'RZWAS', 'E38000147', ccg))
+         ccg = ifelse(dag_id == 'RZWAS', 'E38000147', ccg),
+         place_name = ifelse(dag_id == 'RMP01', 'Tameside General Hospital', place_name),
+         postcode = ifelse(dag_id == 'RMP01', 'OL6 9RW', postcode),
+         country = ifelse(dag_id == 'RMP01', 'England', country),
+         lon = ifelse(dag_id == 'RMP01', -2.0715971, lon),
+         lat = ifelse(dag_id == 'RMP01', 53.4930995, lat),
+         ccg = ifelse(dag_id == 'RMP01', 'E38000182', ccg),
+         place_name = ifelse(dag_id == 'R8QL0', 'Broomfield Hospital', place_name),
+         postcode = ifelse(dag_id == 'R8QL0', 'CM1 7ET', postcode),
+         country = ifelse(dag_id == 'R8QL0', 'England', country),
+         lon = ifelse(dag_id == 'R8QL0', 0.4667492, lon),
+         lat = ifelse(dag_id == 'R8QL0', 51.77446, lat),
+         ccg = ifelse(dag_id == 'R8QL0', 'E38000106', ccg),
+         place_name = ifelse(dag_id == 'RAT01', 'Southend Hospital', place_name),
+         postcode = ifelse(dag_id == 'RAT01', 'SS0 0RY', postcode),
+         country = ifelse(dag_id == 'RAT01', 'England', country),
+         lon = ifelse(dag_id == 'RAT01', 0.6877328, lon),
+         lat = ifelse(dag_id == 'RAT01', 51.55386, lat),
+         ccg = ifelse(dag_id == 'RAT01', 'E38000168', ccg),
+         place_name = ifelse(dag_id == 'TAJ01', 'Southend Hospital', place_name),
+         postcode = ifelse(dag_id == 'TAJ01', 'SS0 0RY', postcode),
+         country = ifelse(dag_id == 'TAJ01', 'England', country),
+         lon = ifelse(dag_id == 'TAJ01', 0.6877328, lon),
+         lat = ifelse(dag_id == 'TAJ01', 51.55386, lat),
+         ccg = ifelse(dag_id == 'TAJ01', 'E38000168', ccg))
 
-combined_all %>% filter(is.na(postcode))
+no_location = combined_all %>% filter(is.na(postcode))
 
 #combined_all %>% filter(is.na(postcode)) -> test
 
